@@ -7,7 +7,7 @@ from PIL import Image
 import numpy as np
 import cv2
 
-# 🧠 Load mô hình MobileNetV2
+# 🧠 Load mô hình
 @st.cache_resource
 def load_model():
     model = mobilenet_v2(weights=None)
@@ -70,7 +70,7 @@ rice_disease_info = {
     }
 }
 
-# 🌫️ Làm mờ ảnh bằng Fuzzy Filter
+# 🌫️ Làm mờ ảnh
 def fuzzy_mean_filter(image: Image.Image, kernel_size=5, sigma=1.2):
     img_np = np.array(image)
     k = cv2.getGaussianKernel(kernel_size, sigma)
@@ -106,7 +106,7 @@ def run_gradcam(image: Image.Image):
         output = model(input_tensor)
         pred_class = output.argmax(dim=1).item()
         confidence = torch.softmax(output, dim=1)[0, pred_class].item()
-        pred_label = class_names[pred_class] if confidence > 0.5 else "Không xác định"
+        pred_label = class_names[pred_class]
 
         model.zero_grad()
         output[0, pred_class].backward()
@@ -127,9 +127,9 @@ def run_gradcam(image: Image.Image):
         img_np = np.array(image)
         overlay = cv2.addWeighted(img_np, 0.5, heatmap, 0.5, 0)
 
-        return overlay, pred_label
+        return overlay, pred_label, confidence
     except Exception:
-        return np.array(image), "Không xác định"
+        return np.array(image), "Không xác định", 0.0
 
 # 🎨 Giao diện Streamlit
 st.set_page_config(page_title="🌾 Nhận diện bệnh lúa", layout="wide")
@@ -141,14 +141,18 @@ if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="📷 Ảnh gốc", use_column_width=True)
 
-    overlay, label = run_gradcam(image)
+    overlay, label, confidence = run_gradcam(image)
     st.image(overlay, caption=f"🔥 Grad-CAM: {label}", use_column_width=True)
+
+    st.markdown(f"### 🔍 Dự đoán: `{label}` ({confidence*100:.1f}%)")
+
+    if confidence < 0.5:
+        st.warning("⚠️ Dự đoán có độ tin cậy thấp. Vui lòng kiểm tra lại ảnh hoặc mô hình.")
 
     info = rice_disease_info.get(label, {
         "vi": "Không có thông tin bệnh.",
         "solution": "Vui lòng kiểm tra lại ảnh hoặc mô hình."
     })
 
-    st.markdown(f"### 🔍 Dự đoán: `{label}`")
     st.markdown(f"**📖 Mô tả:** {info['vi']}")
     st.markdown(f"**🛡️ Cách phòng chống:** {info['solution']}")

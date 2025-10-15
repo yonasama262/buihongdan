@@ -110,7 +110,7 @@ def run_gradcam(image: Image.Image):
     cam = F.relu(cam)
     cam = cam - cam.min()
     cam = cam / cam.max()
-    cam = cam.numpy()
+    cam = cam.cpu().numpy()
 
     cam = cv2.resize(cam, image.size)
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
@@ -140,3 +140,4 @@ if uploaded_file is not None:
     st.markdown(f"### 🔍 Dự đoán: `{label}`")
     st.markdown(f"**📖 Mô tả:** {info['vi']}")
     st.markdown(f"**🛡️ Cách phòng chống:** {info['solution']}")
+

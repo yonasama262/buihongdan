@@ -8,11 +8,16 @@ import numpy as np
 import cv2
 
 # 🧠 Load mô hình MobileNetV2
-model = mobilenet_v2(weights=None)
-model.classifier[1] = torch.nn.Linear(model.last_channel, 10)
-state_dict = torch.load('best_mobilenetv2.pth', map_location='cpu')
-model.load_state_dict(state_dict)
-model.eval()
+@st.cache_resource
+def load_model():
+    model = mobilenet_v2(weights=None)
+    model.classifier[1] = torch.nn.Linear(model.last_channel, 10)
+    state_dict = torch.load("best_mobilenetv2.pth", map_location="cpu")
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model
+
+model = load_model()
 
 # 🏷️ Danh sách lớp bệnh
 class_names = [
@@ -65,7 +70,7 @@ rice_disease_info = {
     }
 }
 
-# 🌫️ Fuzzy mean filter
+# 🌫️ Làm mờ ảnh bằng Fuzzy Filter
 def fuzzy_mean_filter(image: Image.Image, kernel_size=5, sigma=1.2):
     img_np = np.array(image)
     k = cv2.getGaussianKernel(kernel_size, sigma)
@@ -75,7 +80,7 @@ def fuzzy_mean_filter(image: Image.Image, kernel_size=5, sigma=1.2):
         filtered[:, :, c] = cv2.filter2D(img_np[:, :, c], -1, kernel)
     return Image.fromarray(filtered)
 
-# 🔍 Grad-CAM
+# 🔍 Dự đoán và Grad-CAM
 def run_gradcam(image: Image.Image):
     try:
         image_filtered = fuzzy_mean_filter(image)
@@ -100,7 +105,8 @@ def run_gradcam(image: Image.Image):
 
         output = model(input_tensor)
         pred_class = output.argmax(dim=1).item()
-        pred_label = class_names[pred_class]
+        confidence = torch.softmax(output, dim=1)[0, pred_class].item()
+        pred_label = class_names[pred_class] if confidence > 0.5 else "Không xác định"
 
         model.zero_grad()
         output[0, pred_class].backward()
@@ -122,22 +128,21 @@ def run_gradcam(image: Image.Image):
         overlay = cv2.addWeighted(img_np, 0.5, heatmap, 0.5, 0)
 
         return overlay, pred_label
-    except Exception as e:
-        st.error("❌ Không thể tạo Grad-CAM cho ảnh này.")
+    except Exception:
         return np.array(image), "Không xác định"
 
 # 🎨 Giao diện Streamlit
-st.set_page_config(page_title="Nhận diện bệnh lúa", layout="wide")
-st.title("🌾 Nhận diện bệnh lúa bằng Grad-CAM + MobileNetV2")
+st.set_page_config(page_title="🌾 Nhận diện bệnh lúa", layout="wide")
+st.title("🌾 Nhận diện bệnh lúa bằng MobileNetV2 + Grad-CAM")
 
-uploaded_file = st.file_uploader("📤 Kéo thả ảnh cây lúa tại đây", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("📤 Kéo thả ảnh lá lúa tại đây", type=["jpg", "jpeg", "png"])
 
-if uploaded_file is not None:
+if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Ảnh gốc", use_column_width=True)
+    st.image(image, caption="📷 Ảnh gốc", use_column_width=True)
 
     overlay, label = run_gradcam(image)
-    st.image(overlay, caption=f"Grad-CAM: {label}", use_column_width=True)
+    st.image(overlay, caption=f"🔥 Grad-CAM: {label}", use_column_width=True)
 
     info = rice_disease_info.get(label, {
         "vi": "Không có thông tin bệnh.",

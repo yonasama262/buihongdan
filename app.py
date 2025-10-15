@@ -109,7 +109,10 @@ def run_gradcam(image: Image.Image):
     cam = (grads * fmap).sum(dim=1).squeeze()
     cam = F.relu(cam)
     cam = cam - cam.min()
-    cam = cam / cam.max()
+    if cam.max() != 0:
+       cam = cam / cam.max()
+    else:
+       cam = torch.zeros_like(cam)
     cam = cam.cpu().numpy()
 
     cam = cv2.resize(cam, image.size)
@@ -140,4 +143,5 @@ if uploaded_file is not None:
     st.markdown(f"### 🔍 Dự đoán: `{label}`")
     st.markdown(f"**📖 Mô tả:** {info['vi']}")
     st.markdown(f"**🛡️ Cách phòng chống:** {info['solution']}")
+
 

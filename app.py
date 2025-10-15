@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.models import mobilenet_v2
-from PIL import Image
+from PIL import Image, ImageFilter
 import numpy as np
 import cv2
 
@@ -70,16 +70,21 @@ rice_disease_info = {
     }
 }
 
+# 🧼 Tiền xử lý ảnh giống lúc huấn luyện
+def preprocess_image(image: Image.Image):
+    image = image.filter(ImageFilter.GaussianBlur(radius=1.5))
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406],
+                             [0.229, 0.224, 0.225])
+    ])
+    return transform(image).unsqueeze(0)
+
 # 🔍 Dự đoán và Grad-CAM
 def run_gradcam(image: Image.Image):
     try:
-        transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406],
-                                 [0.229, 0.224, 0.225])
-        ])
-        input_tensor = transform(image).unsqueeze(0)
+        input_tensor = preprocess_image(image)
 
         feature_maps = []
         gradients = []

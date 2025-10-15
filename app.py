@@ -70,25 +70,14 @@ rice_disease_info = {
     }
 }
 
-# 🌫️ Làm mờ ảnh
-def fuzzy_mean_filter(image: Image.Image, kernel_size=5, sigma=1.2):
-    img_np = np.array(image)
-    k = cv2.getGaussianKernel(kernel_size, sigma)
-    kernel = k @ k.T
-    filtered = np.zeros_like(img_np)
-    for c in range(3):
-        filtered[:, :, c] = cv2.filter2D(img_np[:, :, c], -1, kernel)
-    return Image.fromarray(filtered)
-
 # 🔍 Dự đoán và Grad-CAM
 def run_gradcam(image: Image.Image):
     try:
-        image_filtered = fuzzy_mean_filter(image)
         transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor()
         ])
-        input_tensor = transform(image_filtered).unsqueeze(0)
+        input_tensor = transform(image).unsqueeze(0)
 
         feature_maps = []
         gradients = []

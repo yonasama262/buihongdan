@@ -9,7 +9,7 @@ import cv2
 
 # 🧠 Load mô hình MobileNetV2
 model = mobilenet_v2(weights=None)
-model.classifier[1] = torch.nn.Linear(model.last_channel, 10)  # 10 lớp bệnh
+model.classifier[1] = torch.nn.Linear(model.last_channel, 10)
 state_dict = torch.load('best_mobilenetv2.pth', map_location='cpu')
 model.load_state_dict(state_dict)
 model.eval()
@@ -77,50 +77,54 @@ def fuzzy_mean_filter(image: Image.Image, kernel_size=5, sigma=1.2):
 
 # 🔍 Grad-CAM
 def run_gradcam(image: Image.Image):
-    image_filtered = fuzzy_mean_filter(image)
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor()
-    ])
-    input_tensor = transform(image_filtered).unsqueeze(0)
+    try:
+        image_filtered = fuzzy_mean_filter(image)
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor()
+        ])
+        input_tensor = transform(image_filtered).unsqueeze(0)
 
-    feature_maps = []
-    gradients = []
+        feature_maps = []
+        gradients = []
 
-    def forward_hook(module, input, output):
-        feature_maps.append(output)
+        def forward_hook(module, input, output):
+            feature_maps.append(output)
 
-    def backward_hook(module, grad_in, grad_out):
-        gradients.append(grad_out[0])
+        def backward_hook(module, grad_in, grad_out):
+            gradients.append(grad_out[0])
 
-    target_layer = model.features[-1]
-    target_layer.register_forward_hook(forward_hook)
-    target_layer.register_backward_hook(backward_hook)
+        target_layer = model.features[-1]
+        target_layer.register_forward_hook(forward_hook)
+        target_layer.register_backward_hook(backward_hook)
 
-    output = model(input_tensor)
-    pred_class = output.argmax(dim=1).item()
-    pred_label = class_names[pred_class]
+        output = model(input_tensor)
+        pred_class = output.argmax(dim=1).item()
+        pred_label = class_names[pred_class]
 
-    model.zero_grad()
-    output[0, pred_class].backward()
+        model.zero_grad()
+        output[0, pred_class].backward()
 
-    grads = gradients[0].mean(dim=[2, 3], keepdim=True)
-    fmap = feature_maps[0]
-    cam = (grads * fmap).sum(dim=1).squeeze()
-    cam = F.relu(cam)
-    cam = cam - cam.min()
-    if cam.max() != 0:
-       cam = cam / cam.max()
-    else:
-       cam = torch.zeros_like(cam)
-    cam = cam.cpu().numpy()
+        grads = gradients[0].mean(dim=[2, 3], keepdim=True)
+        fmap = feature_maps[0]
+        cam = (grads * fmap).sum(dim=1).squeeze()
+        cam = F.relu(cam)
+        cam = cam - cam.min()
+        if cam.max() != 0 and not torch.isnan(cam.max()):
+            cam = cam / cam.max()
+        else:
+            cam = torch.zeros_like(cam)
+        cam = cam.cpu().numpy()
 
-    cam = cv2.resize(cam, image.size)
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
-    img_np = np.array(image)
-    overlay = cv2.addWeighted(img_np, 0.5, heatmap, 0.5, 0)
+        cam = cv2.resize(cam, image.size)
+        heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+        img_np = np.array(image)
+        overlay = cv2.addWeighted(img_np, 0.5, heatmap, 0.5, 0)
 
-    return overlay, pred_label
+        return overlay, pred_label
+    except Exception as e:
+        st.error("❌ Không thể tạo Grad-CAM cho ảnh này.")
+        return np.array(image), "Không xác định"
 
 # 🎨 Giao diện Streamlit
 st.set_page_config(page_title="Nhận diện bệnh lúa", layout="wide")
@@ -143,5 +147,3 @@ if uploaded_file is not None:
     st.markdown(f"### 🔍 Dự đoán: `{label}`")
     st.markdown(f"**📖 Mô tả:** {info['vi']}")
     st.markdown(f"**🛡️ Cách phòng chống:** {info['solution']}")
-
-
